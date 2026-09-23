@@ -1,0 +1,30 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Media & working data (prevent uploading huge or private client audio)
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.ogg
+*.flac
+
+# Local reference and generated captions
+*.srt
+output/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
