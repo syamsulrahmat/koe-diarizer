@@ -219,8 +219,15 @@ def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
     print("[*] Processing unified leveled master audio...")
     out_file = output_dir / f"{audio_path.stem}_leveled.wav"
     
-    # Check if FFmpeg is available
-    if not shutil.which("ffmpeg"):
+    # Prioritize embedded FFmpeg on the SSD, then fall back to system PATH
+    script_dir = Path(__file__).resolve().parent
+    bundled_ffmpeg = script_dir / "runtime" / "ffmpeg.exe"
+    if bundled_ffmpeg.exists():
+        ffmpeg_bin = str(bundled_ffmpeg)
+    else:
+        ffmpeg_bin = shutil.which("ffmpeg")
+
+    if not ffmpeg_bin:
         print("❌ ERROR: FFmpeg is not installed or not in PATH. Cannot process audio.")
         return None
 
@@ -237,7 +244,7 @@ def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
     )
 
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        ffmpeg_bin, "-y", "-hide_banner", "-loglevel", "error",
         "-i", str(audio_path),
         "-af", filtergraph,
         "-ar", "48000",
