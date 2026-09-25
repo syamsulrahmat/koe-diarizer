@@ -265,7 +265,7 @@ def main():
         description="KOE — Speaker Diarization Assignment (Reference SRT)"
     )
     parser.add_argument("audio_file", help="Path to the source audio file (wav, mp3, etc.)")
-    parser.add_argument("reference_srt", help="Path to the reference SRT file")
+    parser.add_argument("reference_srt", nargs="?", default=None, help="Path to the reference SRT file (optional if only using -l to level audio)")
     parser.add_argument(
         "--model", "-m",
         default=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
@@ -279,18 +279,33 @@ def main():
     parser.add_argument(
         "--level-audio", "-l",
         action="store_true",
-        help="Process and output a unified, balanced audio track (Option A: leveled master) alongside the SRTs."
+        help="Process and output a unified, balanced audio track (Option A: leveled master)."
     )
 
     args = parser.parse_args()
     start_time = time.time()
 
     audio_path = Path(args.audio_file).resolve()
-    srt_path = Path(args.reference_srt).resolve()
-
     if not audio_path.exists():
         print(f"Error: Audio file not found: {audio_path}")
         sys.exit(1)
+
+    # Handle Audio-Only Mode
+    if args.reference_srt is None:
+        if not args.level_audio:
+            print("Error: You must provide a reference SRT file for diarization, or use -l to independently level the audio.")
+            sys.exit(1)
+        
+        audio_out_dir = Path(args.output_dir).resolve() if args.output_dir else audio_path.parent
+        audio_out_dir.mkdir(parents=True, exist_ok=True)
+        level_audio_master(audio_path, audio_out_dir)
+        
+        elapsed = time.time() - start_time
+        print(f"\n⏱️  Elapsed time: {elapsed:.2f}s")
+        sys.exit(0)
+
+    # Handle Normal Mode
+    srt_path = Path(args.reference_srt).resolve()
     if not srt_path.exists():
         print(f"Error: SRT file not found: {srt_path}")
         sys.exit(1)
@@ -404,7 +419,8 @@ def main():
     
     # 6. Audio Leveling (Optional)
     if args.level_audio:
-        leveled_file = level_audio_master(audio_path, output_dir)
+        audio_out_dir = Path(args.output_dir).resolve() if args.output_dir else audio_path.parent
+        leveled_file = level_audio_master(audio_path, audio_out_dir)
         if leveled_file:
             created_files.append(leveled_file.name)
 
