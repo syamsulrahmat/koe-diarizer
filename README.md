@@ -44,18 +44,23 @@ Instead of hallucinating or regenerating transcription text, **KOE treats the re
 
 ## Usage
 
+You can run KOE directly from **any directory** using the `koe` command (or `python "path\to\transcribe.py"`):
+
 ```bash
-python transcribe.py <path_to_audio> <path_to_reference_srt> [options]
+koe <path_to_audio> <path_to_reference_srt> [options]
 ```
 
 ### Examples
 
 ```bash
-# Basic run (uses default model in .env)
-python transcribe.py interview.wav reference.srt
+# Basic run from anywhere (outputs directly next to the reference SRT)
+koe "PH-0120.mp3" "PH-0120.srt"
 
 # Specify a custom model flag
-python transcribe.py interview.mp3 reference.srt -m gemini-3.8-flash
+koe "PH-0120.mp3" "PH-0120.srt" -m gemini-3.8-flash
+
+# Specify a custom output directory (optional)
+koe "PH-0120.mp3" "PH-0120.srt" -o "C:\MyOutputFolder"
 ```
 
 ---

@@ -210,7 +210,8 @@ def assign_speakers(client: genai.Client, audio_file: object, subtitles: list[Su
 # ---------------------------------------------------------------------------
 
 def main():
-    load_dotenv()
+    script_dir = Path(__file__).resolve().parent
+    load_dotenv(script_dir / ".env")
 
     parser = argparse.ArgumentParser(
         description="KOE — Speaker Diarization Assignment (Reference SRT)"
@@ -222,12 +223,17 @@ def main():
         default=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
         help="Gemini model name to use (e.g. 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-pro-preview'). Default: 'gemini-3.8-flash' or GEMINI_MODEL env var."
     )
+    parser.add_argument(
+        "--output-dir", "-o",
+        default=None,
+        help="Directory to save the outputs. Default: the directory containing the reference SRT file."
+    )
 
     args = parser.parse_args()
     start_time = time.time()
 
-    audio_path = Path(args.audio_file)
-    srt_path = Path(args.reference_srt)
+    audio_path = Path(args.audio_file).resolve()
+    srt_path = Path(args.reference_srt).resolve()
 
     if not audio_path.exists():
         print(f"Error: Audio file not found: {audio_path}")
@@ -238,10 +244,13 @@ def main():
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or api_key == "your-api-key-here":
-        print("Error: Set your GEMINI_API_KEY in the .env file.")
+        print(f"Error: Set your GEMINI_API_KEY in: {script_dir / '.env'}")
         sys.exit(1)
 
-    output_dir = Path("output") / audio_path.stem
+    if args.output_dir:
+        output_dir = Path(args.output_dir).resolve()
+    else:
+        output_dir = srt_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
     client = genai.Client(api_key=api_key)
