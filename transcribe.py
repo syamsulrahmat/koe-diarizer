@@ -362,73 +362,77 @@ def main():
     args = parser.parse_args()
     start_time = time.time()
 
-    audio_path = Path(args.audio_file).resolve()
+def run_workflow(
+    audio_file: str | Path,
+    reference_srt: str | Path | None = None,
+    model: str = "gemini-3.8-flash",
+    output_dir: str | Path | None = None,
+    level_audio: bool = False,
+    split_audio: bool = False,
+):
+    """
+    Core execution engine for KOE. Callable from CLI or GUI.
+    """
+    script_dir = Path(__file__).resolve().parent
+    load_dotenv(script_dir / ".env")
+    start_time = time.time()
+
+    audio_path = Path(audio_file).resolve()
     if not audio_path.exists():
-        print(f"Error: Audio file not found: {audio_path}")
-        sys.exit(1)
+        raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
     # Handle Audio-Only Mode (Bypass SRT)
-    if args.reference_srt is None:
-        if args.split_audio:
-            print("Error: Option B (--split-audio) REQUIRES a reference SRT file to know who is speaking.")
-            sys.exit(1)
-        if not args.level_audio:
-            print("Error: You must provide a reference SRT file for diarization, or use -l to independently level the audio.")
-            sys.exit(1)
+    if reference_srt is None or str(reference_srt).strip() == "":
+        if split_audio:
+            raise ValueError("Option B (--split-audio) REQUIRES a reference SRT file to know who is speaking.")
+        if not level_audio:
+            raise ValueError("You must provide a reference SRT file for diarization, or enable Level Audio (-l).")
         
-        audio_out_dir = Path(args.output_dir).resolve() if args.output_dir else audio_path.parent
+        audio_out_dir = Path(output_dir).resolve() if output_dir else audio_path.parent
         audio_out_dir.mkdir(parents=True, exist_ok=True)
-        level_audio_master(audio_path, audio_out_dir)
+        leveled = level_audio_master(audio_path, audio_out_dir)
+        if not leveled:
+            raise RuntimeError("Audio leveling failed.")
         
         elapsed = time.time() - start_time
         print(f"\n⏱️  Elapsed time: {elapsed:.2f}s")
-        sys.exit(0)
+        return [leveled]
 
     # Handle Normal Mode
-    srt_path = Path(args.reference_srt).resolve()
+    srt_path = Path(reference_srt).resolve()
     if not srt_path.exists():
-        print(f"Error: SRT file not found: {srt_path}")
-        sys.exit(1)
+        raise FileNotFoundError(f"SRT file not found: {srt_path}")
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key or api_key == "your-api-key-here":
-        print(f"Error: Set your GEMINI_API_KEY in: {script_dir / '.env'}")
-        sys.exit(1)
+        raise ValueError(f"Set your GEMINI_API_KEY in: {script_dir / '.env'}")
 
-    if args.output_dir:
-        output_dir = Path(args.output_dir).resolve()
-    else:
-        output_dir = srt_path.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(output_dir).resolve() if output_dir else srt_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     client = genai.Client(api_key=api_key)
 
     # 1. Parse SRT
     subtitles = parse_srt(srt_path)
     if not subtitles:
-        print("Error: No valid subtitles found in the reference SRT.")
-        sys.exit(1)
+        raise ValueError("No valid subtitles found in the reference SRT.")
 
     # 2. Upload and get assignments
-    audio_file = upload_audio(client, audio_path)
-    assignment_result = assign_speakers(client, audio_file, subtitles, model=args.model)
+    audio_file_obj = upload_audio(client, audio_path)
+    assignment_result = assign_speakers(client, audio_file_obj, subtitles, model=model)
 
     # 3. Merge data and write report.json
     print(f"[3/4] Reconciling data and saving report.json...")
     
-    # Build a lookup dictionary from Gemini's response
     assignment_map = {a.subtitle_id: a for a in assignment_result.assignments}
-    
     report_data = []
-    speaker_groups = {}  # { "Speaker 1": [SubtitleBlock, ...] }
+    speaker_groups = {}
 
     for sub in subtitles:
         assignment = assignment_map.get(sub.id)
-        
         speaker_label = assignment.speaker if assignment else "Unknown Speaker"
         confidence = assignment.confidence if assignment else "none"
 
-        # Add to JSON report data
         report_data.append({
             "subtitle_id": sub.id,
             "speaker": speaker_label,
@@ -436,11 +440,9 @@ def main():
             "timestamp": sub.raw_timestamp,
             "text": sub.raw_text
         })
-
-        # Add to speaker groups for SRT generation
         speaker_groups.setdefault(speaker_label, []).append(sub)
 
-    json_path = output_dir / "report.json"
+    json_path = out_dir / "report.json"
     json_path.write_text(
         json.dumps(report_data, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -450,24 +452,20 @@ def main():
     print("[4/4] Generating per-speaker SRT files...")
     created_files = []
     
-    # Sort speakers for deterministic ordering
     for speaker_key in sorted(speaker_groups.keys()):
-        # Convert speaker label to a safe filename (e.g., "Speaker 1" -> "speaker_1.srt")
         safe_speaker_name = re.sub(r'[^a-zA-Z0-9_]', '_', speaker_key.lower()).strip('_')
         if not safe_speaker_name:
             safe_speaker_name = "unknown"
         filename = f"{safe_speaker_name}.srt"
-        filepath = output_dir / filename
+        filepath = out_dir / filename
 
         subs_for_speaker = speaker_groups[speaker_key]
         lines = []
-        
-        # Preserve the EXACT original subtitle order and ID
         for sub in subs_for_speaker:
             lines.append(sub.original_id_str)
             lines.append(sub.raw_timestamp)
             lines.append(sub.raw_text)
-            lines.append("")  # Blank line separator
+            lines.append("")
         
         filepath.write_text("\n".join(lines), encoding="utf-8")
         created_files.append(filename)
@@ -476,46 +474,40 @@ def main():
     print("[5/5] Performing strict validation...")
     total_written = 0
     for file_name in created_files:
-        written_subs = parse_srt(output_dir / file_name)
+        written_subs = parse_srt(out_dir / file_name)
         total_written += len(written_subs)
-        # Verify text and timestamps match memory exactly
         for w_sub in written_subs:
             orig = next((s for s in subtitles if s.id == w_sub.id), None)
             if not orig:
-                print(f"❌ ERROR: Subtitle ID {w_sub.id} generated but not in source!")
-                sys.exit(1)
+                raise RuntimeError(f"Subtitle ID {w_sub.id} generated but not in source!")
             if w_sub.raw_timestamp != orig.raw_timestamp:
-                print(f"❌ ERROR: Timestamp mismatch on subtitle {w_sub.id}")
-                sys.exit(1)
+                raise RuntimeError(f"Timestamp mismatch on subtitle {w_sub.id}")
             if w_sub.raw_text != orig.raw_text:
-                print(f"❌ ERROR: Text mismatch on subtitle {w_sub.id}")
-                sys.exit(1)
+                raise RuntimeError(f"Text mismatch on subtitle {w_sub.id}")
 
     if total_written != len(subtitles):
-        print(f"❌ ERROR: Subtitle count mismatch! Original: {len(subtitles)}, Written: {total_written}")
-        sys.exit(1)
+        raise RuntimeError(f"Subtitle count mismatch! Original: {len(subtitles)}, Written: {total_written}")
 
     print(f"\n✓ Validation passed! All {len(subtitles)} subtitles matched byte-for-byte.")
     
     # 6. Audio Processing (Option A and B)
-    if args.level_audio or args.split_audio:
-        audio_out_dir = Path(args.output_dir).resolve() if args.output_dir else audio_path.parent
+    if level_audio or split_audio:
+        audio_out_dir = Path(output_dir).resolve() if output_dir else audio_path.parent
         leveled_file = level_audio_master(audio_path, audio_out_dir)
         
         if leveled_file:
-            if args.level_audio:
+            if level_audio:
                 created_files.append(leveled_file.name)
             
-            if args.split_audio:
+            if split_audio:
                 stem_paths = generate_split_stems(leveled_file, audio_out_dir, speaker_groups)
                 for stem in stem_paths:
                     created_files.append(stem.name)
             
-            # If they only asked for split stems, clean up the intermediate master file
-            if args.split_audio and not args.level_audio:
+            if split_audio and not level_audio:
                 leveled_file.unlink()
 
-    print(f"✓ Output saved to: {output_dir}/")
+    print(f"✓ Output saved to: {out_dir}/")
     print(f"  ├── report.json")
     for i, f in enumerate(created_files):
         connector = "└──" if i == len(created_files) - 1 else "├──"
@@ -524,11 +516,57 @@ def main():
     elapsed = time.time() - start_time
     minutes = int(elapsed // 60)
     seconds = elapsed % 60
-    if minutes > 0:
-        time_str = f"{minutes}m {seconds:.1f}s"
-    else:
-        time_str = f"{seconds:.2f}s"
+    time_str = f"{minutes}m {seconds:.1f}s" if minutes > 0 else f"{seconds:.2f}s"
     print(f"\n⏱️  Elapsed time: {time_str}")
+    return created_files
 
-if __name__ == "__main__":
-    main()
+
+def main():
+    script_dir = Path(__file__).resolve().parent
+    load_dotenv(script_dir / ".env")
+
+    parser = argparse.ArgumentParser(
+        description="KOE — Speaker Diarization Assignment (Reference SRT)"
+    )
+    parser.add_argument("audio_file", help="Path to the source audio file (wav, mp3, etc.)")
+    parser.add_argument("reference_srt", nargs="?", default=None, help="Path to the reference SRT file (optional if only using -l to level audio)")
+    
+    # Core Options
+    parser.add_argument(
+        "--model", "-m",
+        default=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+        help="Gemini model name to use (e.g. 'gemini-3.8-flash', 'gemini-3.1-pro-preview'). Default: 'gemini-3.8-flash'."
+    )
+    parser.add_argument(
+        "--output-dir", "-o",
+        default=None,
+        help="Directory to save outputs. Default: the directory containing the reference SRT file."
+    )
+    
+    # Audio Processing Options
+    audio_group = parser.add_argument_group('Audio Processing Options')
+    audio_group.add_argument(
+        "--level-audio", "-l",
+        action="store_true",
+        help="[Option A] Process and output a unified, balanced audio track (e.g., audio_leveled.wav). Can run entirely offline without an SRT file."
+    )
+    audio_group.add_argument(
+        "--split-audio", "-s",
+        action="store_true",
+        help="[Option B] Isolate each speaker into their own dedicated audio track (e.g., audio_speaker_1.wav). Mutes the track when the person is not talking. REQUIRES a reference SRT file."
+    )
+
+    args = parser.parse_args()
+
+    try:
+        run_workflow(
+            audio_file=args.audio_file,
+            reference_srt=args.reference_srt,
+            model=args.model,
+            output_dir=args.output_dir,
+            level_audio=args.level_audio,
+            split_audio=args.split_audio
+        )
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)

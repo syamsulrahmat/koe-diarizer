@@ -12,16 +12,12 @@ if not exist "%TARGET_DIR%" (
     mkdir "%TARGET_DIR%"
 )
 
-if exist "%SCRIPT_DIR%runtime\python.exe" (
-    set "PY_EXEC="%SCRIPT_DIR%runtime\python.exe""
-) else (
-    set "PY_EXEC=python"
-)
-
-echo @echo off > "%TARGET_DIR%\koe.cmd"
-echo %PY_EXEC% "%SCRIPT_DIR%transcribe.py" %%* >> "%TARGET_DIR%\koe.cmd"
+copy /y "%SCRIPT_DIR%koe.cmd" "%TARGET_DIR%\koe.cmd" >nul
 
 echo [SUCCESS] KOE is now registered on this computer!
+echo.
+echo  • To open the graphical app: Type 'koe' (or double-click launch_gui.bat)
+echo  • To use from the command line: Type 'koe "audio.mp3" "captions.srt"'
 echo You can open ANY terminal anywhere and run:
 echo.
 echo     koe "path\to\audio.mp3" "path\to\captions.srt"

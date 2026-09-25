@@ -57,7 +57,23 @@ This project contains a self-contained embedded Python runtime on the SSD. You c
 
 ---
 
-## Usage
+## Desktop GUI Application
+
+KOE now includes a sleek, dark-themed desktop application:
+
+* **From Windows File Explorer:** Double-click **`launch_gui.bat`** (or `koe.cmd`) inside the project folder.
+* **From Any Terminal:** Simply type **`koe`** (with no arguments).
+
+The GUI allows you to:
+- Browse and select your audio/video and reference SRT files easily.
+- Check / uncheck **Level Master Audio (Option A)** and **Split Speaker Stems (Option B)**.
+- Choose your Gemini model from a dropdown menu.
+- Watch live console output and progress.
+
+---
+
+## Command Line Usage
+
 
 You can run KOE directly from **any directory** using the `koe` command (or `python "path\to\transcribe.py"`):
 
