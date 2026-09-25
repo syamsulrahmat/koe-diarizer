@@ -215,7 +215,7 @@ class KoeApp(ctk.CTk):
         self.denoise_var = ctk.BooleanVar(value=True)
         self.denoise_cb = ctk.CTkCheckBox(
             checkboxes_frame,
-            text="Suppress Background Noise & Crowd Bleed (Spectral Denoising)",
+            text="AI Voice Isolation (Eliminates crowd chatter, babble & room noise)",
             variable=self.denoise_var
         )
         self.denoise_cb.pack(anchor="w", pady=4)
