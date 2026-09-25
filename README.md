@@ -66,7 +66,7 @@ KOE now includes a sleek, dark-themed desktop application:
 
 The GUI allows you to:
 - Browse and select your audio/video and reference SRT files easily.
-- Check / uncheck **Level Master Audio (Option A)** and **Split Speaker Stems (Option B)**.
+- Check / uncheck **Level Master Audio** and **Split Speaker Stems**.
 - Choose your Gemini model from a dropdown menu.
 - Watch live console output and progress.
 
@@ -87,13 +87,13 @@ koe <path_to_audio> <path_to_reference_srt> [options]
 # Basic run from anywhere (outputs directly next to the reference SRT)
 koe "PH-0120.mp3" "PH-0120.srt"
 
-# Process speaker SRTs AND output a perfectly leveled master audio track (Option A)
+# Process speaker SRTs AND output a perfectly leveled master audio track
 koe "PH-0120.mp3" "PH-0120.srt" -l
 
-# Isolate each speaker into their own dedicated, leveled audio track (Option B)
+# Isolate each speaker into their own dedicated, leveled audio track
 koe "PH-0120.mp3" "PH-0120.srt" -s
 
-# Do both (Option A + B)
+# Do both (Level Master + Split Stems)
 koe "PH-0120.mp3" "PH-0120.srt" -l -s
 
 # Specify a custom model flag

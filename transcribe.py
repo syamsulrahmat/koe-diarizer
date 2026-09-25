@@ -208,7 +208,7 @@ def assign_speakers(client: genai.Client, audio_file: object, subtitles: list[Su
 
 
 # ---------------------------------------------------------------------------
-# Audio Processing (Option A)
+# Audio Processing
 # ---------------------------------------------------------------------------
 
 def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
@@ -216,7 +216,7 @@ def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
     Applies transparent dynamic dialogue normalization and true-peak limiting.
     Outputs a unified leveled master track.
     """
-    print("[*] Processing unified leveled master audio (Option A)...")
+    print("[*] Processing unified leveled master audio...")
     out_file = output_dir / f"{audio_path.stem}_leveled.wav"
     
     # Check if FFmpeg is available
@@ -264,10 +264,10 @@ def srt_time_to_seconds(time_str: str) -> float:
 
 def generate_split_stems(leveled_wav_path: Path, output_dir: Path, speaker_groups: dict) -> list[Path]:
     """
-    Reads the Option A leveled WAV file and isolates each speaker into their own dedicated track
-    (Option B) based on SRT boundaries, preserving pristine time sync and audio fidelity.
+    Reads the leveled WAV file and isolates each speaker into their own dedicated track
+    based on SRT boundaries, preserving pristine time sync and audio fidelity.
     """
-    print("[*] Generating Split Stems (Option B)...")
+    print("[*] Generating Split Speaker Stems...")
     
     with wave.open(str(leveled_wav_path), "rb") as wav_in:
         params = wav_in.getparams()
@@ -351,12 +351,12 @@ def main():
     audio_group.add_argument(
         "--level-audio", "-l",
         action="store_true",
-        help="[Option A] Process and output a unified, balanced audio track (e.g., audio_leveled.wav). Can run entirely offline without an SRT file."
+        help="Process and output a unified, balanced audio track (e.g., audio_leveled.wav). Can run entirely offline without an SRT file."
     )
     audio_group.add_argument(
         "--split-audio", "-s",
         action="store_true",
-        help="[Option B] Isolate each speaker into their own dedicated audio track (e.g., audio_speaker_1.wav). Mutes the track when the person is not talking. REQUIRES a reference SRT file."
+        help="Isolate each speaker into their own dedicated audio track (e.g., audio_speaker_1.wav). Mutes the track when the person is not talking. REQUIRES a reference SRT file."
     )
 
     args = parser.parse_args()
@@ -384,7 +384,7 @@ def run_workflow(
     # Handle Audio-Only Mode (Bypass SRT)
     if reference_srt is None or str(reference_srt).strip() == "":
         if split_audio:
-            raise ValueError("Option B (--split-audio) REQUIRES a reference SRT file to know who is speaking.")
+            raise ValueError("Splitting audio stems (--split-audio) REQUIRES a reference SRT file to know who is speaking.")
         if not level_audio:
             raise ValueError("You must provide a reference SRT file for diarization, or enable Level Audio (-l).")
         

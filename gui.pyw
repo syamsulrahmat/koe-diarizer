@@ -173,7 +173,7 @@ class KoeApp(ctk.CTk):
         self.level_audio_var = ctk.BooleanVar(value=True)
         self.level_audio_cb = ctk.CTkCheckBox(
             checkboxes_frame,
-            text="Level Master Audio [Option A] (Unified broadcast dialogue)",
+            text="Level Master Audio (Unified broadcast dialogue track)",
             variable=self.level_audio_var
         )
         self.level_audio_cb.pack(anchor="w", pady=4)
@@ -181,7 +181,7 @@ class KoeApp(ctk.CTk):
         self.split_audio_var = ctk.BooleanVar(value=False)
         self.split_audio_cb = ctk.CTkCheckBox(
             checkboxes_frame,
-            text="Split Speaker Stems [Option B] (Requires SRT, isolates speaker_1.wav, speaker_2.wav)",
+            text="Split Speaker Stems (Requires SRT, isolates speaker_1.wav, speaker_2.wav)",
             variable=self.split_audio_var
         )
         self.split_audio_cb.pack(anchor="w", pady=4)
@@ -334,7 +334,7 @@ class KoeApp(ctk.CTk):
         if not srt_path and split_audio:
             messagebox.showerror(
                 "Error",
-                "Option B (Split Speaker Stems) requires a reference SRT file to identify speaker boundaries."
+                "Split Speaker Stems requires a reference SRT file to identify speaker boundaries."
             )
             return
 
