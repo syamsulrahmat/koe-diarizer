@@ -1,2 +1,2 @@
 @echo off
-python "%~dp0transcribe.py" %*
+"%~dp0runtime\python.exe" "%~dp0transcribe.py" %*

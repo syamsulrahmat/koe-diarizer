@@ -3,13 +3,16 @@
 .env.*
 !.env.example
 
-# Python cache & virtual environments
+# Python cache, virtual environments & embedded runtime
 __pycache__/
 *.py[cod]
 *$py.class
 .venv/
 venv/
 env/
+runtime/
+get-pip.py
+*.zip
 
 # Media & working data (prevent uploading huge or private client audio)
 *.wav

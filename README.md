@@ -42,6 +42,20 @@ Instead of hallucinating or regenerating transcription text, **KOE treats the re
 
 ---
 
+## Portable SSD Usage (Plug-and-Play on Any PC)
+
+This project contains a self-contained embedded Python runtime on the SSD. You can take this SSD to any Windows PC without installing Python:
+
+1. **Plug the SSD into the computer.**
+2. Double-click **`register_on_this_pc.bat`** once.
+3. Open any Command Prompt or PowerShell window and run:
+   ```bash
+   koe "audio.mp3" "captions.srt"
+   ```
+*(When you're done or want to remove the shortcut from that PC, double-click `uninstall_from_this_pc.bat`).*
+
+---
+
 ## Usage
 
 You can run KOE directly from **any directory** using the `koe` command (or `python "path\to\transcribe.py"`):
