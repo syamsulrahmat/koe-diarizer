@@ -13,6 +13,9 @@ env/
 runtime/
 get-pip.py
 *.zip
+dist/
+build/
+*.spec
 
 # Media & working data (prevent uploading huge or private client audio)
 *.wav

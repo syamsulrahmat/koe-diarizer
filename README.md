@@ -17,8 +17,19 @@ Instead of hallucinating or regenerating transcription text, **KOE treats the re
 
 ---
 
-## Installation
+## Installation & Distribution
 
+### Option 1: Standalone Web-Installer (`KOE-Setup.exe`)
+For distributing to colleagues or other computers without git or terminal commands:
+1. Download or run **`dist/KOE-Setup.exe`**.
+2. The setup wizard will:
+   - Allow you to choose your installation folder (defaults to `%LOCALAPPDATA%\Programs\KOE`).
+   - Download the clean embedded Python runtime and all dependencies automatically over the web.
+   - Configure shortcuts on your **Desktop** and **Start Menu** with the KOE icon.
+   - Register the `koe` command in your Windows Terminal PATH.
+   - Register in Windows Settings (**Installed Apps**) for clean uninstallation.
+
+### Option 2: Clone from GitHub
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/<your-username>/koe-diarizer.git
