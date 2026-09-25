@@ -10,7 +10,7 @@ Instead of hallucinating or regenerating transcription text, **KOE treats the re
 
 - **Authoritative Subtitle Preservation:** Zero text rewrite, zero timestamp drift, no deleted or merged captions.
 - **Strict Byte-for-Byte Double-Blind Verification:** Automatically validates all output subtitles against the input source before saving.
-- **Intelligent Audio Leveling:** Optional `-l` flag to produce a dynamically normalized broadcast-standard dialogue master track.
+- **Intelligent Audio Processing:** Use `-l` for a dynamically normalized broadcast-master track, or `-s` to generate isolated, dedicated audio stems for each speaker (`speaker_1.wav`, `speaker_2.wav`).
 - **Multimodal AI Speaker Attribution:** Utilizes Gemini (e.g. `gemini-3.8-flash` or `gemini-3.1-pro-preview`) via structured Pydantic schema mapping.
 - **Detailed JSON Report:** Exports `report.json` with speaker assignments and confidence levels.
 - **Unicode & Non-ASCII Safe:** Seamlessly handles Japanese file paths, full-width characters, and UTF-8 BOM headers.
@@ -71,8 +71,14 @@ koe <path_to_audio> <path_to_reference_srt> [options]
 # Basic run from anywhere (outputs directly next to the reference SRT)
 koe "PH-0120.mp3" "PH-0120.srt"
 
-# Process speaker SRTs AND output a perfectly leveled master audio track
+# Process speaker SRTs AND output a perfectly leveled master audio track (Option A)
 koe "PH-0120.mp3" "PH-0120.srt" -l
+
+# Isolate each speaker into their own dedicated, leveled audio track (Option B)
+koe "PH-0120.mp3" "PH-0120.srt" -s
+
+# Do both (Option A + B)
+koe "PH-0120.mp3" "PH-0120.srt" -l -s
 
 # Specify a custom model flag
 koe "PH-0120.mp3" "PH-0120.srt" -m gemini-3.8-flash

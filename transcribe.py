@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import wave
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -240,7 +241,7 @@ def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
         "-i", str(audio_path),
         "-af", filtergraph,
         "-ar", "48000",
-        "-c:a", "pcm_s24le",
+        "-c:a", "pcm_s16le",
         str(out_file)
     ]
 
@@ -251,6 +252,72 @@ def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
     except subprocess.CalledProcessError as e:
         print(f"❌ ERROR: FFmpeg audio processing failed: {e}")
         return None
+
+def srt_time_to_seconds(time_str: str) -> float:
+    # time_str format: "00:00:01,200"
+    parts = time_str.replace(",", ":").split(":")
+    hours = int(parts[0])
+    minutes = int(parts[1])
+    seconds = int(parts[2])
+    milliseconds = int(parts[3])
+    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000.0
+
+def generate_split_stems(leveled_wav_path: Path, output_dir: Path, speaker_groups: dict) -> list[Path]:
+    """
+    Reads the Option A leveled WAV file and isolates each speaker into their own dedicated track
+    (Option B) based on SRT boundaries, preserving pristine time sync and audio fidelity.
+    """
+    print("[*] Generating Split Stems (Option B)...")
+    
+    with wave.open(str(leveled_wav_path), "rb") as wav_in:
+        params = wav_in.getparams()
+        n_channels = params.nchannels
+        sampwidth = params.sampwidth
+        framerate = params.framerate
+        n_frames = params.nframes
+        raw_audio = bytearray(wav_in.readframes(n_frames))
+        
+    bytes_per_frame = n_channels * sampwidth
+    padding_sec = 0.3  # Add 300ms padding so breaths/tails aren't chopped abruptly
+    
+    generated_files = []
+    
+    for speaker_name, subs in speaker_groups.items():
+        # Initialize a silent bytearray of the exact same length as the master track
+        speaker_audio = bytearray(len(raw_audio))
+        
+        for sub in subs:
+            try:
+                start_str, end_str = sub.raw_timestamp.split(" --> ")
+                start_sec = max(0.0, srt_time_to_seconds(start_str.strip()) - padding_sec)
+                end_sec = srt_time_to_seconds(end_str.strip()) + padding_sec
+                
+                start_frame = int(start_sec * framerate)
+                end_frame = int(end_sec * framerate)
+                
+                start_byte = start_frame * bytes_per_frame
+                # Ensure bytes align perfectly with frame boundaries
+                start_byte = start_byte - (start_byte % bytes_per_frame)
+                
+                end_byte = min(end_frame * bytes_per_frame, len(raw_audio))
+                end_byte = end_byte - (end_byte % bytes_per_frame)
+                
+                if start_byte < end_byte:
+                    speaker_audio[start_byte:end_byte] = raw_audio[start_byte:end_byte]
+            except Exception as e:
+                print(f"Warning: Failed to process audio bounds for subtitle {sub.id}: {e}")
+                
+        stem_name = f"{leveled_wav_path.stem.replace('_leveled', '')}_{speaker_name}.wav"
+        stem_path = output_dir / stem_name
+        
+        with wave.open(str(stem_path), "wb") as wav_out:
+            wav_out.setparams(params)
+            wav_out.writeframes(speaker_audio)
+            
+        generated_files.append(stem_path)
+        print(f"  └── {stem_name}")
+        
+    return generated_files
 
 
 # ---------------------------------------------------------------------------
@@ -266,20 +333,30 @@ def main():
     )
     parser.add_argument("audio_file", help="Path to the source audio file (wav, mp3, etc.)")
     parser.add_argument("reference_srt", nargs="?", default=None, help="Path to the reference SRT file (optional if only using -l to level audio)")
+    
+    # Core Options
     parser.add_argument(
         "--model", "-m",
         default=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
-        help="Gemini model name to use (e.g. 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.1-pro-preview'). Default: 'gemini-3.8-flash' or GEMINI_MODEL env var."
+        help="Gemini model name to use (e.g. 'gemini-3.8-flash', 'gemini-3.1-pro-preview'). Default: 'gemini-3.8-flash'."
     )
     parser.add_argument(
         "--output-dir", "-o",
         default=None,
-        help="Directory to save the outputs. Default: the directory containing the reference SRT file."
+        help="Directory to save outputs. Default: the directory containing the reference SRT file."
     )
-    parser.add_argument(
+    
+    # Audio Processing Options
+    audio_group = parser.add_argument_group('Audio Processing Options')
+    audio_group.add_argument(
         "--level-audio", "-l",
         action="store_true",
-        help="Process and output a unified, balanced audio track (Option A: leveled master)."
+        help="[Option A] Process and output a unified, balanced audio track (e.g., audio_leveled.wav). Can run entirely offline without an SRT file."
+    )
+    audio_group.add_argument(
+        "--split-audio", "-s",
+        action="store_true",
+        help="[Option B] Isolate each speaker into their own dedicated audio track (e.g., audio_speaker_1.wav). Mutes the track when the person is not talking. REQUIRES a reference SRT file."
     )
 
     args = parser.parse_args()
@@ -290,8 +367,11 @@ def main():
         print(f"Error: Audio file not found: {audio_path}")
         sys.exit(1)
 
-    # Handle Audio-Only Mode
+    # Handle Audio-Only Mode (Bypass SRT)
     if args.reference_srt is None:
+        if args.split_audio:
+            print("Error: Option B (--split-audio) REQUIRES a reference SRT file to know who is speaking.")
+            sys.exit(1)
         if not args.level_audio:
             print("Error: You must provide a reference SRT file for diarization, or use -l to independently level the audio.")
             sys.exit(1)
@@ -417,12 +497,23 @@ def main():
 
     print(f"\n✓ Validation passed! All {len(subtitles)} subtitles matched byte-for-byte.")
     
-    # 6. Audio Leveling (Optional)
-    if args.level_audio:
+    # 6. Audio Processing (Option A and B)
+    if args.level_audio or args.split_audio:
         audio_out_dir = Path(args.output_dir).resolve() if args.output_dir else audio_path.parent
         leveled_file = level_audio_master(audio_path, audio_out_dir)
+        
         if leveled_file:
-            created_files.append(leveled_file.name)
+            if args.level_audio:
+                created_files.append(leveled_file.name)
+            
+            if args.split_audio:
+                stem_paths = generate_split_stems(leveled_file, audio_out_dir, speaker_groups)
+                for stem in stem_paths:
+                    created_files.append(stem.name)
+            
+            # If they only asked for split stems, clean up the intermediate master file
+            if args.split_audio and not args.level_audio:
+                leveled_file.unlink()
 
     print(f"✓ Output saved to: {output_dir}/")
     print(f"  ├── report.json")
