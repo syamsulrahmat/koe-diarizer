@@ -14,6 +14,7 @@ import mimetypes
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -206,6 +207,53 @@ def assign_speakers(client: genai.Client, audio_file: object, subtitles: list[Su
 
 
 # ---------------------------------------------------------------------------
+# Audio Processing (Option A)
+# ---------------------------------------------------------------------------
+
+def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
+    """
+    Applies transparent dynamic dialogue normalization and true-peak limiting.
+    Outputs a unified leveled master track.
+    """
+    print("[*] Processing unified leveled master audio (Option A)...")
+    out_file = output_dir / f"{audio_path.stem}_leveled.wav"
+    
+    # Check if FFmpeg is available
+    if not shutil.which("ffmpeg"):
+        print("❌ ERROR: FFmpeg is not installed or not in PATH. Cannot process audio.")
+        return None
+
+    # Filtergraph:
+    # 1. highpass=f=80 (Remove rumble/mic bumps)
+    # 2. dynaudnorm=p=0.9:m=10:s=5:g=15 (Dynamic normalizer targeting dialogue)
+    # 3. loudnorm=I=-16:LRA=11:TP=-1.5 (Broadcast standard normalization)
+    # 4. alimiter=limit=-1.5dB (True-peak brickwall)
+    filtergraph = (
+        "highpass=f=80,"
+        "dynaudnorm=p=0.9:m=10:s=5:g=15,"
+        "loudnorm=I=-16:LRA=11:TP=-1.5:print_format=summary,"
+        "alimiter=limit=-1.5dB"
+    )
+
+    cmd = [
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-i", str(audio_path),
+        "-af", filtergraph,
+        "-ar", "48000",
+        "-c:a", "pcm_s24le",
+        str(out_file)
+    ]
+
+    try:
+        subprocess.run(cmd, check=True)
+        print(f"✓ Leveled master audio saved to: {out_file.name}")
+        return out_file
+    except subprocess.CalledProcessError as e:
+        print(f"❌ ERROR: FFmpeg audio processing failed: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------------
 # Main Logic
 # ---------------------------------------------------------------------------
 
@@ -227,6 +275,11 @@ def main():
         "--output-dir", "-o",
         default=None,
         help="Directory to save the outputs. Default: the directory containing the reference SRT file."
+    )
+    parser.add_argument(
+        "--level-audio", "-l",
+        action="store_true",
+        help="Process and output a unified, balanced audio track (Option A: leveled master) alongside the SRTs."
     )
 
     args = parser.parse_args()
@@ -348,6 +401,13 @@ def main():
         sys.exit(1)
 
     print(f"\n✓ Validation passed! All {len(subtitles)} subtitles matched byte-for-byte.")
+    
+    # 6. Audio Leveling (Optional)
+    if args.level_audio:
+        leveled_file = level_audio_master(audio_path, output_dir)
+        if leveled_file:
+            created_files.append(leveled_file.name)
+
     print(f"✓ Output saved to: {output_dir}/")
     print(f"  ├── report.json")
     for i, f in enumerate(created_files):
