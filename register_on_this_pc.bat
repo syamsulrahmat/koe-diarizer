@@ -12,8 +12,14 @@ if not exist "%TARGET_DIR%" (
     mkdir "%TARGET_DIR%"
 )
 
+if exist "%SCRIPT_DIR%runtime\python.exe" (
+    set "PY_EXEC="%SCRIPT_DIR%runtime\python.exe""
+) else (
+    set "PY_EXEC=python"
+)
+
 echo @echo off > "%TARGET_DIR%\koe.cmd"
-echo "%SCRIPT_DIR%runtime\python.exe" "%SCRIPT_DIR%transcribe.py" %%* >> "%TARGET_DIR%\koe.cmd"
+echo %PY_EXEC% "%SCRIPT_DIR%transcribe.py" %%* >> "%TARGET_DIR%\koe.cmd"
 
 echo [SUCCESS] KOE is now registered on this computer!
 echo You can open ANY terminal anywhere and run:
