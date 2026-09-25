@@ -236,28 +236,36 @@ def level_audio_master(audio_path: Path, output_dir: Path, denoise: bool = True)
         return None
 
     # Filtergraph assembly:
-    # 1. highpass=f=80 (Remove sub-bass rumble/mic thumps)
-    # 2. Neural Voice Isolation (arnndn): Uses deep learning model to isolate speech & remove crowd noise
-    # 3. dynaudnorm with m=3 (Conservative gain capping to prevent amplifying background noise)
-    # 4. loudnorm=I=-16:TP=-1.5 (Broadcast dialogue loudness normalization)
-    # 5. alimiter=limit=-1.5dB (True-peak brickwall)
-    filters = ["highpass=f=80"]
+    # 1. highpass=f=75 (Preserves deep male vocal fundamentals down to 80 Hz, removes HVAC rumble & stage thumps)
+    # 2. Neural Voice Isolation (arnndn): Recurrent neural network tuned to 88% mix for transparent, organic dialogue
+    # 3. Parametric Vocal Warmth, Intelligibility & Sheen EQ:
+    #    - 180 Hz (+1.8 dB): Restores chest resonance/warmth hollowed by noise reduction
+    #    - 450 Hz (-1.5 dB): Tames muddy room boxiness & hollow reflections
+    #    - 3.2 kHz (+2.2 dB): Enhances speech articulation & crisp consonant clarity
+    #    - 10 kHz (+1.2 dB shelf): Adds subtle high-end broadcast sheen and air
+    # 4. dynaudnorm with m=2.5 and g=31 (Wide smoothing window to completely eliminate volume pumping)
+    # 5. loudnorm=I=-16:TP=-1.5 (Broadcast dialogue loudness normalization)
+    # 6. alimiter=limit=-1.5dB (True-peak brickwall)
+    filters = ["highpass=f=75"]
     
     if denoise:
         # Check for bundled RNNoise deep learning model (trained for crowd/babble noise)
         model_path = script_dir / "assets" / "models" / "cb.rnnn"
         if model_path.exists():
-            # Format path for FFmpeg filter parser (escape backslashes and drive colon)
             escaped_path = str(model_path.resolve()).replace("\\", "/").replace(":", "\\\\:")
             filters.append("aresample=48000")
-            filters.append(f"arnndn=m={escaped_path}:mix=0.95")
-            print("  ↳ Using Deep Learning Neural Voice Isolation (crowd & babble removal)...")
+            filters.append(f"arnndn=m={escaped_path}:mix=0.88")
+            # Vocal warmth & clarity enhancement
+            filters.append("equalizer=f=180:t=q:w=0.7:g=1.8")
+            filters.append("equalizer=f=450:t=q:w=1.0:g=-1.5")
+            filters.append("equalizer=f=3200:t=q:w=0.9:g=2.2")
+            filters.append("equalizer=f=10000:t=h:g=1.2")
+            print("  ↳ Using Neural Voice Isolation & Broadcast Dialogue Enhancement...")
         else:
-            # Fallback to adaptive FFT spectral subtraction if model is missing
-            filters.append("afftdn=nr=14:nf=-45:tn=1:gs=4")
+            filters.append("afftdn=nr=12:nf=-45:tn=1:gs=4")
             
-    # Use m=3 (max 3x / ~9.5 dB gain) and b=1 to stop boosting quiet room tone
-    filters.append("dynaudnorm=p=0.9:m=3:s=5:g=15:b=1")
+    # Ultra-smooth leveling: m=2.5 (max ~8 dB boost) and g=31 (smooth transparent window)
+    filters.append("dynaudnorm=p=0.9:m=2.5:s=5:g=31:b=1")
     filters.append("loudnorm=I=-16:LRA=11:TP=-1.5:print_format=summary")
     filters.append("alimiter=limit=-1.5dB")
 

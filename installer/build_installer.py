@@ -104,8 +104,13 @@ def build():
     print("\n[3/4] Compiling KOE-Setup.exe with PyInstaller...")
     icon_path = ROOT_DIR / "assets" / "icon.ico"
 
-    cmd = [
-        sys.executable, "-m", "PyInstaller",
+    pyinstaller_bin = shutil.which("pyinstaller")
+    if pyinstaller_bin:
+        cmd = [pyinstaller_bin]
+    else:
+        cmd = [sys.executable, "-m", "PyInstaller"]
+
+    cmd.extend([
         "--noconfirm",
         "--onefile",
         "--windowed",
@@ -115,7 +120,7 @@ def build():
         f"--add-data={tk_zip};.",
         f"--add-data={installer_assets};assets",
         str(INSTALLER_DIR / "setup_wizard.py")
-    ]
+    ])
 
     subprocess.run(cmd, cwd=str(ROOT_DIR), check=True)
 
