@@ -212,6 +212,14 @@ class KoeApp(ctk.CTk):
         )
         self.level_audio_cb.pack(anchor="w", pady=4)
 
+        self.denoise_var = ctk.BooleanVar(value=True)
+        self.denoise_cb = ctk.CTkCheckBox(
+            checkboxes_frame,
+            text="Suppress Background Noise & Crowd Bleed (Spectral Denoising)",
+            variable=self.denoise_var
+        )
+        self.denoise_cb.pack(anchor="w", pady=4)
+
         self.split_audio_var = ctk.BooleanVar(value=False)
         self.split_audio_cb = ctk.CTkCheckBox(
             checkboxes_frame,
@@ -350,6 +358,7 @@ class KoeApp(ctk.CTk):
         output_dir = self.output_entry.get().strip()
         level_audio = self.level_audio_var.get()
         split_audio = self.split_audio_var.get()
+        denoise = self.denoise_var.get()
 
         model_selected = self.model_combo.get().split(" ")[0].strip()
 
@@ -388,12 +397,12 @@ class KoeApp(ctk.CTk):
 
         worker = threading.Thread(
             target=self._worker_thread,
-            args=(audio_path, srt_path, model_selected, output_dir, level_audio, split_audio),
+            args=(audio_path, srt_path, model_selected, output_dir, level_audio, split_audio, denoise),
             daemon=True
         )
         worker.start()
 
-    def _worker_thread(self, audio_path, srt_path, model, output_dir, level_audio, split_audio):
+    def _worker_thread(self, audio_path, srt_path, model, output_dir, level_audio, split_audio, denoise):
         old_stdout = sys.stdout
         old_stderr = sys.stderr
         redirector = TextRedirector(self.log_queue)
@@ -410,7 +419,8 @@ class KoeApp(ctk.CTk):
                 model=model,
                 output_dir=output_dir if output_dir else None,
                 level_audio=level_audio,
-                split_audio=split_audio
+                split_audio=split_audio,
+                denoise=denoise
             )
             success = True
         except Exception as e:

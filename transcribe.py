@@ -211,12 +211,16 @@ def assign_speakers(client: genai.Client, audio_file: object, subtitles: list[Su
 # Audio Processing
 # ---------------------------------------------------------------------------
 
-def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
+def level_audio_master(audio_path: Path, output_dir: Path, denoise: bool = True) -> Path | None:
     """
-    Applies transparent dynamic dialogue normalization and true-peak limiting.
+    Applies dynamic dialogue normalization, spectral noise reduction, and true-peak limiting.
     Outputs a unified leveled master track.
     """
-    print("[*] Processing unified leveled master audio...")
+    if denoise:
+        print("[*] Processing unified leveled master audio (with noise suppression)...")
+    else:
+        print("[*] Processing unified leveled master audio...")
+
     out_file = output_dir / f"{audio_path.stem}_leveled.wav"
     
     # Prioritize embedded FFmpeg on the SSD, then fall back to system PATH
@@ -231,17 +235,20 @@ def level_audio_master(audio_path: Path, output_dir: Path) -> Path | None:
         print("❌ ERROR: FFmpeg is not installed or not in PATH. Cannot process audio.")
         return None
 
-    # Filtergraph:
-    # 1. highpass=f=80 (Remove rumble/mic bumps)
-    # 2. dynaudnorm=p=0.9:m=10:s=5:g=15 (Dynamic normalizer targeting dialogue)
-    # 3. loudnorm=I=-16:LRA=11:TP=-1.5 (Broadcast standard normalization)
-    # 4. alimiter=limit=-1.5dB (True-peak brickwall)
-    filtergraph = (
-        "highpass=f=80,"
-        "dynaudnorm=p=0.9:m=10:s=5:g=15,"
-        "loudnorm=I=-16:LRA=11:TP=-1.5:print_format=summary,"
-        "alimiter=limit=-1.5dB"
-    )
+    # Filtergraph assembly:
+    # 1. highpass=f=80 (Remove sub-bass rumble/mic thumps)
+    # 2. afftdn (Adaptive FFT spectral noise reduction to suppress room hiss, AC hum, crowd bleed)
+    # 3. dynaudnorm with m=4 (Caps gain to prevent amplifying background noise) and b=1 (Smooth boundaries)
+    # 4. loudnorm=I=-16:TP=-1.5 (Broadcast dialogue loudness normalization)
+    # 5. alimiter=limit=-1.5dB (True-peak brickwall)
+    filters = ["highpass=f=80"]
+    if denoise:
+        filters.append("afftdn=nr=12:nf=-45:tn=1:gs=4")
+    filters.append("dynaudnorm=p=0.9:m=4:s=5:g=15:b=1")
+    filters.append("loudnorm=I=-16:LRA=11:TP=-1.5:print_format=summary")
+    filters.append("alimiter=limit=-1.5dB")
+
+    filtergraph = ",".join(filters)
 
     cmd = [
         ffmpeg_bin, "-y", "-hide_banner", "-loglevel", "error",
@@ -376,6 +383,7 @@ def run_workflow(
     output_dir: str | Path | None = None,
     level_audio: bool = False,
     split_audio: bool = False,
+    denoise: bool = True,
 ):
     """
     Core execution engine for KOE. Callable from CLI or GUI.
@@ -397,7 +405,7 @@ def run_workflow(
         
         audio_out_dir = Path(output_dir).resolve() if output_dir else audio_path.parent
         audio_out_dir.mkdir(parents=True, exist_ok=True)
-        leveled = level_audio_master(audio_path, audio_out_dir)
+        leveled = level_audio_master(audio_path, audio_out_dir, denoise=denoise)
         if not leveled:
             raise RuntimeError("Audio leveling failed.")
         
@@ -497,10 +505,10 @@ def run_workflow(
 
     print(f"\n✓ Validation passed! All {len(subtitles)} subtitles matched byte-for-byte.")
     
-    # 6. Audio Processing (Option A and B)
+    # 6. Audio Processing
     if level_audio or split_audio:
         audio_out_dir = Path(output_dir).resolve() if output_dir else audio_path.parent
-        leveled_file = level_audio_master(audio_path, audio_out_dir)
+        leveled_file = level_audio_master(audio_path, audio_out_dir, denoise=denoise)
         
         if leveled_file:
             if level_audio:
@@ -555,12 +563,24 @@ def main():
     audio_group.add_argument(
         "--level-audio", "-l",
         action="store_true",
-        help="[Option A] Process and output a unified, balanced audio track (e.g., audio_leveled.wav). Can run entirely offline without an SRT file."
+        help="Process and output a unified, balanced audio track (e.g., audio_leveled.wav). Can run entirely offline without an SRT file."
     )
     audio_group.add_argument(
         "--split-audio", "-s",
         action="store_true",
-        help="[Option B] Isolate each speaker into their own dedicated audio track (e.g., audio_speaker_1.wav). Mutes the track when the person is not talking. REQUIRES a reference SRT file."
+        help="Isolate each speaker into their own dedicated audio track (e.g., audio_speaker_1.wav). Mutes the track when the person is not talking. REQUIRES a reference SRT file."
+    )
+    audio_group.add_argument(
+        "--denoise", "-d",
+        action="store_true",
+        default=True,
+        help="Apply spectral noise suppression to eliminate crowd chatter and room hiss (Enabled by default)."
+    )
+    audio_group.add_argument(
+        "--no-denoise",
+        action="store_false",
+        dest="denoise",
+        help="Disable background noise suppression."
     )
 
     args = parser.parse_args()
@@ -572,7 +592,8 @@ def main():
             model=args.model,
             output_dir=args.output_dir,
             level_audio=args.level_audio,
-            split_audio=args.split_audio
+            split_audio=args.split_audio,
+            denoise=args.denoise
         )
     except Exception as e:
         print(f"Error: {e}")

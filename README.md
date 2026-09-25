@@ -98,14 +98,20 @@ koe <path_to_audio> <path_to_reference_srt> [options]
 # Basic run from anywhere (outputs directly next to the reference SRT)
 koe "PH-0120.mp3" "PH-0120.srt"
 
-# Process speaker SRTs AND output a perfectly leveled master audio track
+# Process speaker SRTs AND output a leveled dialogue track (with adaptive noise suppression)
 koe "PH-0120.mp3" "PH-0120.srt" -l
+
+# Disable noise suppression if you prefer raw background ambiance
+koe "PH-0120.mp3" "PH-0120.srt" -l --no-denoise
 
 # Isolate each speaker into their own dedicated, leveled audio track
 koe "PH-0120.mp3" "PH-0120.srt" -s
 
 # Do both (Level Master + Split Stems)
 koe "PH-0120.mp3" "PH-0120.srt" -l -s
+
+# Offline Audio-Only Leveling with Noise Reduction (Accepts any video/audio)
+koe "video.mp4" -l
 
 # Specify a custom model flag
 koe "PH-0120.mp3" "PH-0120.srt" -m gemini-3.8-flash
