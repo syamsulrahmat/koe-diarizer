@@ -134,17 +134,23 @@ class InstallerApp(ctk.CTk):
         self.key_entry.pack(fill="x", padx=14, pady=(0, 10))
 
         # Shortcuts Options
+        ctk.CTkLabel(
+            self.config_card,
+            text="Shortcuts & Integration:",
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=14, pady=(2, 2))
+
         options_frame = ctk.CTkFrame(self.config_card, fg_color="transparent")
         options_frame.pack(fill="x", padx=14, pady=(0, 12))
 
         self.desktop_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(options_frame, text="Create Desktop Shortcut", variable=self.desktop_var).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(options_frame, text="Add Shortcut to Desktop", variable=self.desktop_var).pack(anchor="w", pady=3)
 
         self.start_menu_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(options_frame, text="Create Start Menu Shortcut", variable=self.start_menu_var).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(options_frame, text="Add Shortcut to Start Menu", variable=self.start_menu_var).pack(anchor="w", pady=3)
 
         self.path_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(options_frame, text="Add 'koe' command to Windows Terminal PATH", variable=self.path_var).pack(anchor="w", pady=2)
+        ctk.CTkCheckBox(options_frame, text="Add 'koe' command to Windows Terminal PATH", variable=self.path_var).pack(anchor="w", pady=3)
 
         # Progress / Status Section
         self.progress_bar = ctk.CTkProgressBar(self.main_container)
@@ -353,14 +359,14 @@ class InstallerApp(ctk.CTk):
 
             # Create Desktop Shortcut
             if self.desktop_var.get():
-                desktop = Path(os.path.expandvars(r"%USERPROFILE%\Desktop"))
                 ps_cmd = (
                     f"$ws = New-Object -ComObject WScript.Shell; "
-                    f"$s = $ws.CreateShortcut('{desktop / 'KOE.lnk'}'); "
+                    f"$desk = [Environment]::GetFolderPath('Desktop'); "
+                    f"$s = $ws.CreateShortcut($desk + '\\KOE.lnk'); "
                     f"$s.TargetPath = '{launch_target}'; "
                     f"$s.WorkingDirectory = '{target_dir}'; "
                     f"$s.IconLocation = '{icon_ico},0'; "
-                    f"$s.Description = 'KOE — Speaker Diarization & Audio Leveler'; "
+                    f"$s.Description = 'KOE - Speaker Diarization and Audio Leveler'; "
                     f"$s.Save()"
                 )
                 subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], creationflags=subprocess.CREATE_NO_WINDOW)
@@ -368,14 +374,14 @@ class InstallerApp(ctk.CTk):
 
             # Create Start Menu Shortcut
             if self.start_menu_var.get():
-                start_menu = Path(os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Start Menu\Programs"))
                 ps_cmd = (
                     f"$ws = New-Object -ComObject WScript.Shell; "
-                    f"$s = $ws.CreateShortcut('{start_menu / 'KOE.lnk'}'); "
+                    f"$start = [Environment]::GetFolderPath('Programs'); "
+                    f"$s = $ws.CreateShortcut($start + '\\KOE.lnk'); "
                     f"$s.TargetPath = '{launch_target}'; "
                     f"$s.WorkingDirectory = '{target_dir}'; "
                     f"$s.IconLocation = '{icon_ico},0'; "
-                    f"$s.Description = 'KOE — Speaker Diarization & Audio Leveler'; "
+                    f"$s.Description = 'KOE - Speaker Diarization and Audio Leveler'; "
                     f"$s.Save()"
                 )
                 subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], creationflags=subprocess.CREATE_NO_WINDOW)
