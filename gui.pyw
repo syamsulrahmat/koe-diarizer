@@ -12,12 +12,21 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+import ctypes
+from PIL import Image
+
 import customtkinter as ctk
 from transcribe import run_workflow
 
 # Configure theme and appearance
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+# Set Windows AppUserModelID so the taskbar displays the custom icon properly
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("koe.srt.diarizer.app")
+except Exception:
+    pass
 
 
 class TextRedirector:
@@ -41,6 +50,15 @@ class KoeApp(ctk.CTk):
         self.geometry("780x760")
         self.minsize(720, 680)
 
+        # Set window icon if available
+        self.assets_dir = Path(__file__).resolve().parent / "assets"
+        icon_ico = self.assets_dir / "icon.ico"
+        if icon_ico.exists():
+            try:
+                self.iconbitmap(str(icon_ico))
+            except Exception:
+                pass
+
         # Thread-safe log queue
         self.log_queue = queue.Queue()
         self.is_processing = False
@@ -53,21 +71,37 @@ class KoeApp(ctk.CTk):
         main_container = ctk.CTkFrame(self, corner_radius=12)
         main_container.pack(fill="both", expand=True, padx=16, pady=16)
 
-        # Header Title
+        # Header Frame with Icon and Title
+        header_frame = ctk.CTkFrame(main_container, fg_color="transparent")
+        header_frame.pack(pady=(12, 14))
+
+        icon_png = self.assets_dir / "icon.png"
+        if icon_png.exists():
+            try:
+                pil_img = Image.open(icon_png)
+                logo_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(52, 52))
+                logo_label = ctk.CTkLabel(header_frame, image=logo_img, text="")
+                logo_label.pack(side="left", padx=(0, 14))
+            except Exception:
+                pass
+
+        title_text_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
+        title_text_frame.pack(side="left")
+
         title_label = ctk.CTkLabel(
-            main_container,
+            title_text_frame,
             text="KOE (声)",
             font=ctk.CTkFont(size=26, weight="bold")
         )
-        title_label.pack(pady=(12, 2))
+        title_label.pack(anchor="w")
 
         subtitle_label = ctk.CTkLabel(
-            main_container,
+            title_text_frame,
             text="Precision SRT Diarization & Broadcast Audio Leveler",
             font=ctk.CTkFont(size=13),
             text_color="gray70"
         )
-        subtitle_label.pack(pady=(0, 14))
+        subtitle_label.pack(anchor="w")
 
         # -------------------------------------------------------------
         # File Inputs Card
